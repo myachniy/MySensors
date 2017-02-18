@@ -92,6 +92,21 @@ bool gatewayTransportConnect(void)
 {
 #if defined(MY_GATEWAY_ESP8266)
 	while (WiFi.status() != WL_CONNECTED) {
+#if defined (MY_ESP8266_SSID_LIST)
+		static uint8_t retries = 0;
+		static uint8_t currSsidIndex = 0;
+
+		if(retries-- == 0)
+		{
+			WiFi.disconnect();
+			WiFi.begin(MY_ESP8266_SSID_LIST[currSsidIndex][0], MY_ESP8266_SSID_LIST[currSsidIndex][1]);
+			
+			retries = 20;
+
+			if(++currSsidIndex > MY_ESP8266_SSID_LIST_ITEMS)
+				currSsidIndex = 0;
+		}
+#endif
 		wait(500);
 		MY_SERIALDEVICE.print(F("."));
 	}
@@ -140,7 +155,9 @@ bool gatewayTransportInit(void)
 #ifdef MY_IP_ADDRESS
 	WiFi.config(_MQTT_clientIp, _gatewayIp, _subnetIp);
 #endif
+#if !defined (MY_ESP8266_SSID_LIST)
 	(void)WiFi.begin(MY_ESP8266_SSID, MY_ESP8266_PASSWORD);
+#endif	
 #endif
 
 	gatewayTransportConnect();
