@@ -1,4 +1,4 @@
-/**
+﻿/*
  * The MySensors Arduino library handles the wireless radio link and protocol
  * between your home built sensors/actuators and HA controller of choice.
  * The sensors forms a self healing radio network with optional repeaters. Each
@@ -6,7 +6,7 @@
  * network topology allowing messages to be routed to nodes.
  *
  * Created by Henrik Ekblad <henrik.ekblad@mysensors.org>
- * Copyright (C) 2013-2016 Sensnology AB
+ * Copyright (C) 2013-2017 Sensnology AB
  * Full contributor list: https://github.com/mysensors/MySensors/graphs/contributors
  *
  * Documentation: http://www.mysensors.org
@@ -48,7 +48,7 @@ inline void hwDigitalWrite(uint8_t, uint8_t);
 inline int hwDigitalRead(uint8_t);
 inline void hwPinMode(uint8_t, uint8_t);
 
-void hwInit();
+bool hwInit(void);
 inline void hwReadConfigBlock(void* buf, void* addr, size_t length);
 inline void hwWriteConfigBlock(void* buf, void* addr, size_t length);
 inline uint8_t hwReadConfig(int addr);

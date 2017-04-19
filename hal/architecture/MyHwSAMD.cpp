@@ -6,7 +6,7 @@
  * network topology allowing messages to be routed to nodes.
  *
  * Created by Henrik Ekblad <henrik.ekblad@mysensors.org>
- * Copyright (C) 2013-2015 Sensnology AB
+ * Copyright (C) 2013-2017 Sensnology AB
  * Full contributor list: https://github.com/mysensors/Arduino/graphs/contributors
  *
  * Documentation: http://www.mysensors.org
@@ -41,79 +41,55 @@ ISR (WDT_vect)
 */
 
 
-
-void i2c_eeprom_write_byte(unsigned int eeaddress, byte data )
-{
-	int rdata = data;
-	Wire.beginTransmission(I2C_EEP_ADDRESS);
-	Wire.write((int)(eeaddress >> 8)); // MSB
-	Wire.write((int)(eeaddress & 0xFF)); // LSB
-	Wire.write(rdata);
-	Wire.endTransmission();
-}
-
-byte i2c_eeprom_read_byte(unsigned int eeaddress )
-{
-	byte rdata = 0xFF;
-	Wire.beginTransmission(I2C_EEP_ADDRESS);
-	Wire.write((int)(eeaddress >> 8)); // MSB
-	Wire.write((int)(eeaddress & 0xFF)); // LSB
-	Wire.endTransmission();
-	Wire.requestFrom(I2C_EEP_ADDRESS,1);
-	if (Wire.available()) {
-		rdata = Wire.read();
-	}
-	return rdata;
-}
-
 void hwReadConfigBlock(void* buf, void* adr, size_t length)
 {
 	uint8_t* dst = static_cast<uint8_t*>(buf);
-	int offs = reinterpret_cast<int>(adr);
-	while (length-- > 0) {
-		*dst++ = i2c_eeprom_read_byte(offs++);
-	}
+	const int offs = reinterpret_cast<int>(adr);
+	(void)eep.read(offs, dst, length);
+
 }
 
 void hwWriteConfigBlock(void* buf, void* adr, size_t length)
 {
 	uint8_t* src = static_cast<uint8_t*>(buf);
-	int offs = reinterpret_cast<int>(adr);
-	while (length-- > 0) {
-		i2c_eeprom_write_byte(offs++, *src++);
-	}
+	const int offs = reinterpret_cast<int>(adr);
+	// use update() instead of write() to reduce e2p wear off
+	(void)eep.update(offs, src, length);
 }
 
 uint8_t hwReadConfig(int adr)
 {
-	uint8_t value;
-	hwReadConfigBlock(&value, reinterpret_cast<void*>(adr), 1);
-	return value;
+	return eep.read(adr);
 }
 
 void hwWriteConfig(int adr, uint8_t value)
 {
-	uint8_t curr = hwReadConfig(adr);
-	if (curr != value) {
-		hwWriteConfigBlock(&value, reinterpret_cast<void*>(adr), 1);
-	}
+	(void)eep.update(adr, value);
 }
 
-void hwInit()
+bool hwInit(void)
 {
 	MY_SERIALDEVICE.begin(MY_BAUD_RATE);
 #if defined(MY_GATEWAY_SERIAL)
 	while (!MY_SERIALDEVICE) {}
 #endif
-	Wire.begin();
+
+	const uint8_t eepInit = eep.begin(MY_EXT_EEPROM_TWI_CLOCK);
+#if defined(SENSEBENDER_GW_SAMD_V1)
+	// check connection to external EEPROM - only sensebender GW
+	return eepInit==0;
+#else
+	(void)eepInit;
+	return true;
+#endif
 }
 
-void hwWatchdogReset()
+void hwWatchdogReset(void)
 {
 	// TODO: Not supported!
 }
 
-void hwReboot()
+void hwReboot(void)
 {
 	NVIC_SystemReset();
 	while (true);
@@ -147,7 +123,13 @@ int8_t hwSleep(uint8_t interrupt1, uint8_t mode1, uint8_t interrupt2, uint8_t mo
 	return MY_SLEEP_NOT_POSSIBLE;
 }
 
-#if defined(MY_DEBUG) || defined(MY_SPECIAL_DEBUG)
+bool hwUniqueID(unique_id_t *uniqueID)
+{
+	(void)memcpy((uint8_t*)uniqueID, (uint32_t *)0x0080A00C, 4);
+	(void)memcpy((uint8_t*)uniqueID + 4, (uint32_t *)0x0080A040, 12);
+	return true;
+}
+
 uint16_t hwCPUVoltage()
 {
 
@@ -194,19 +176,22 @@ uint16_t hwCPUFrequency()
 uint16_t hwFreeMem()
 {
 	// TODO: Not supported!
-	return 0;
+	return FUNCTION_NOT_SUPPORTED;
 }
-#endif
 
-#ifdef MY_DEBUG
 void hwDebugPrint(const char *fmt, ... )
 {
 	if (MY_SERIALDEVICE) {
 		char fmtBuffer[MY_SERIAL_OUTPUT_SIZE];
 #ifdef MY_GATEWAY_FEATURE
 		// prepend debug message to be handled correctly by controller (C_INTERNAL, I_LOG_MESSAGE)
-		snprintf(fmtBuffer, sizeof(fmtBuffer), PSTR("0;255;%d;0;%d;"), C_INTERNAL, I_LOG_MESSAGE);
+		snprintf(fmtBuffer, sizeof(fmtBuffer), PSTR("0;255;%d;0;%d;%lu "), C_INTERNAL, I_LOG_MESSAGE,
+		         hwMillis());
 		MY_SERIALDEVICE.print(fmtBuffer);
+#else
+		// prepend timestamp
+		MY_SERIALDEVICE.print(hwMillis());
+		MY_SERIALDEVICE.print(" ");
 #endif
 		va_list args;
 		va_start (args, fmt );
@@ -221,8 +206,5 @@ void hwDebugPrint(const char *fmt, ... )
 		va_end (args);
 		MY_SERIALDEVICE.print(fmtBuffer);
 		//	MY_SERIALDEVICE.flush();
-
-		//MY_SERIALDEVICE.write(freeRam());
 	}
 }
-#endif

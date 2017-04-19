@@ -1,4 +1,4 @@
-/*
+﻿/*
  * The MySensors Arduino library handles the wireless radio link and protocol
  * between your home built sensors/actuators and HA controller of choice.
  * The sensors forms a self healing radio network with optional repeaters. Each
@@ -6,7 +6,7 @@
  * network topology allowing messages to be routed to nodes.
  *
  * Created by Henrik Ekblad <henrik.ekblad@mysensors.org>
- * Copyright (C) 2013-2015 Sensnology AB
+ * Copyright (C) 2013-2017 Sensnology AB
  * Full contributor list: https://github.com/mysensors/Arduino/graphs/contributors
  *
  * Documentation: http://www.mysensors.org
@@ -25,14 +25,6 @@
 
 #ifndef MyHw_h
 #define MyHw_h
-
-#include "MyConfig.h"
-#include "MyMessage.h"
-
-
-#ifdef __cplusplus
-#include <Arduino.h>
-#endif
 
 // Implement these as functions or macros
 /*
@@ -55,6 +47,14 @@ uint8_t hwReadConfig(int adr);
  * Sleep for a defined time, using minimum power.
  * @param ms   Time to sleep, in [ms].
  * @return Nonsense, please ignore.
+ */
+
+typedef uint8_t unique_id_t[16];
+
+/**
+ * Sleep for a defined time, using minimum power.
+ * @param ms         Time to sleep, in [ms].
+ * @return -1.
  */
 int8_t hwSleep(unsigned long ms);
 
@@ -79,7 +79,13 @@ int8_t hwSleep(uint8_t interrupt, uint8_t mode, unsigned long ms);
 int8_t hwSleep(uint8_t interrupt1, uint8_t mode1, uint8_t interrupt2, uint8_t mode2,
                unsigned long ms);
 
-#if defined(MY_DEBUG) || defined(MY_SPECIAL_DEBUG)
+/**
+* Retrieve unique ID
+* @param uniqueID uniqueID
+* @return True if unique ID successfully retrieved
+*/
+bool hwUniqueID(unique_id_t* uniqueID);
+
 /**
  * CPU voltage
  * @return CPU voltage in mV
@@ -97,9 +103,8 @@ uint16_t hwCPUFrequency();
  * @return free memory in bytes
  */
 uint16_t hwFreeMem();
-#endif
 
-#ifdef MY_DEBUG
+#if defined(DEBUG_OUTPUT_ENABLED)
 void hwDebugPrint(const char *fmt, ... );
 #endif
 
