@@ -52,7 +52,7 @@ uint8_t _SPCR; //!< _SPCR
 uint8_t _SPSR; //!< _SPSR
 #endif
 
-#ifdef LINUX_ARCH_RASPBERRYPI
+#ifdef LINUX_SPI_BCM
 // SPI RX and TX buffers (max packet len + 1 byte for the command)
 uint8_t spi_rxbuff[RFM69_MAX_PACKET_LEN + 1];
 uint8_t spi_txbuff[RFM69_MAX_PACKET_LEN + 1];
@@ -66,7 +66,8 @@ LOCAL void RFM69_csn(const bool level)
 LOCAL void RFM69_prepareSPITransaction(void)
 {
 #if !defined(MY_SOFTSPI) && defined(SPI_HAS_TRANSACTION)
-	_SPI.beginTransaction(SPISettings(MY_RFM69_SPI_SPEED, RFM69_SPI_DATA_ORDER, RFM69_SPI_DATA_MODE));
+	RFM69_SPI.beginTransaction(SPISettings(MY_RFM69_SPI_SPEED, RFM69_SPI_DATA_ORDER,
+	                                       RFM69_SPI_DATA_MODE));
 #else
 #if defined(SREG)
 	_SREG = SREG;
@@ -80,9 +81,9 @@ LOCAL void RFM69_prepareSPITransaction(void)
 
 	// set RFM69 SPI settings
 #if !defined(MY_SOFTSPI)
-	_SPI.setDataMode(RFM69_SPI_DATA_MODE);
-	_SPI.setBitOrder(RFM69_SPI_DATA_ORDER);
-	_SPI.setClockDivider(RFM69_CLOCK_DIV);
+	RFM69_SPI.setDataMode(RFM69_SPI_DATA_MODE);
+	RFM69_SPI.setBitOrder(RFM69_SPI_DATA_ORDER);
+	RFM69_SPI.setClockDivider(RFM69_CLOCK_DIV);
 #endif
 
 #endif
@@ -91,7 +92,7 @@ LOCAL void RFM69_prepareSPITransaction(void)
 LOCAL void RFM69_concludeSPITransaction(void)
 {
 #if !defined(MY_SOFTSPI) && defined(SPI_HAS_TRANSACTION)
-	_SPI.endTransaction();
+	RFM69_SPI.endTransaction();
 #else
 	// restore SPI settings to what they were before talking to RFM69
 #if defined(SPCR) && defined(SPSR)
@@ -115,7 +116,7 @@ LOCAL uint8_t RFM69_spiMultiByteTransfer(const uint8_t cmd, uint8_t* buf, uint8_
 	RFM69_prepareSPITransaction();
 	RFM69_csn(LOW);
 
-#ifdef LINUX_ARCH_RASPBERRYPI
+#ifdef LINUX_SPI_BCM
 	uint8_t * prx = spi_rxbuff;
 	uint8_t * ptx = spi_txbuff;
 	uint8_t size = len + 1; // Add register value to transmit buffer
@@ -128,7 +129,7 @@ LOCAL uint8_t RFM69_spiMultiByteTransfer(const uint8_t cmd, uint8_t* buf, uint8_
 			*ptx++ = *current++;
 		}
 	}
-	_SPI.transfernb((char *)spi_txbuff, (char *)spi_rxbuff, size);
+	RFM69_SPI.transfernb((char *)spi_txbuff, (char *)spi_rxbuff, size);
 	if (aReadMode) {
 		if (size == 2) {
 			status = *++prx;   // result is 2nd byte of receive buffer
@@ -143,15 +144,15 @@ LOCAL uint8_t RFM69_spiMultiByteTransfer(const uint8_t cmd, uint8_t* buf, uint8_
 		status = *prx; // status is 1st byte of receive buffer
 	}
 #else
-	status = _SPI.transfer(cmd);
+	status = RFM69_SPI.transfer(cmd);
 	while (len--) {
 		if (aReadMode) {
-			status = _SPI.transfer((uint8_t)RFM69_NOP);
+			status = RFM69_SPI.transfer((uint8_t)RFM69_NOP);
 			if (buf != NULL) {
 				*current++ = status;
 			}
 		} else {
-			status = _SPI.transfer(*current++);
+			status = RFM69_SPI.transfer(*current++);
 		}
 	}
 #endif
@@ -166,14 +167,14 @@ LOCAL uint8_t RFM69_spiMultiByteTransfer(const uint8_t cmd, uint8_t* buf, uint8_
 LOCAL uint8_t RFM69_RAW_readByteRegister(const uint8_t address)
 {
 	const uint8_t value =  RFM69_spiMultiByteTransfer(address, NULL, 1, true);
-	//RFM69_DEBUG(PSTR("RFM69:read register, reg=0x%02x, value=%d\n"), address, value);
+	//RFM69_DEBUG(PSTR("RFM69:read register, reg=0x%02" PRIx8 ", value=%" PRIu8 "\n"), address, value);
 	return value;
 }
 
 // low level register access
 LOCAL uint8_t RFM69_RAW_writeByteRegister(const uint8_t address, uint8_t value)
 {
-	//RFM69_DEBUG(PSTR("RFM69:write register, reg=0x%02x, value=%d\n"), address & 0x7F, value);
+	//RFM69_DEBUG(PSTR("RFM69:write register, reg=0x%02" PRIx8 ", value=%" PRIu8 "\n"), address & 0x7F, value);
 	return RFM69_spiMultiByteTransfer(address, &value, 1, false);
 }
 
@@ -200,10 +201,12 @@ LOCAL bool RFM69_initialise(const uint32_t frequencyHz)
 	hwDigitalWrite(MY_RFM69_RST_PIN, LOW);
 	// wait until chip ready
 	delay(5);
-	RFM69_DEBUG(PSTR("RFM69:INIT:PIN,CS=%d,IQP=%d,IQN=%d,RST=%d\n"), MY_RFM69_CS_PIN,MY_RFM69_IRQ_PIN,
+	RFM69_DEBUG(PSTR("RFM69:INIT:PIN,CS=%" PRIu8 ",IQP=%" PRIu8 ",IQN=%" PRIu8 ",RST=%" PRIu8 "\n"),
+	            MY_RFM69_CS_PIN,MY_RFM69_IRQ_PIN,
 	            MY_RFM69_IRQ_NUM,MY_RFM69_RST_PIN);
 #else
-	RFM69_DEBUG(PSTR("RFM69:INIT:PIN,CS=%d,IQP=%d,IQN=%d\n"),MY_RFM69_CS_PIN, MY_RFM69_IRQ_PIN,
+	RFM69_DEBUG(PSTR("RFM69:INIT:PIN,CS=%" PRIu8 ",IQP=%" PRIu8 ",IQN=%" PRIu8 "\n"),MY_RFM69_CS_PIN,
+	            MY_RFM69_IRQ_PIN,
 	            MY_RFM69_IRQ_NUM);
 #endif
 
@@ -221,7 +224,7 @@ LOCAL bool RFM69_initialise(const uint32_t frequencyHz)
 	// SPI init
 	hwDigitalWrite(MY_RFM69_CS_PIN, HIGH);
 	hwPinMode(MY_RFM69_CS_PIN, OUTPUT);
-	_SPI.begin();
+	RFM69_SPI.begin();
 
 	RFM69_setConfiguration();
 	RFM69_setFrequency(frequencyHz);
@@ -234,7 +237,7 @@ LOCAL bool RFM69_initialise(const uint32_t frequencyHz)
 	// IRQ
 	hwPinMode(MY_RFM69_IRQ_PIN, INPUT);
 #if defined (SPI_HAS_TRANSACTION) && !defined (ESP8266) && !defined (MY_SOFTSPI)
-	_SPI.usingInterrupt(digitalPinToInterrupt(MY_RFM69_IRQ_PIN));
+	RFM69_SPI.usingInterrupt(digitalPinToInterrupt(MY_RFM69_IRQ_PIN));
 #endif
 
 #ifdef MY_DEBUG_VERBOSE_RFM69_REGISTERS
@@ -273,12 +276,10 @@ LOCAL void RFM69_interruptHandler(void)
 		if (regIrqFlags2 & RFM69_IRQFLAGS2_FIFOLEVEL) {
 			RFM69_prepareSPITransaction();
 			RFM69_csn(LOW);
-
-#ifdef LINUX_ARCH_RASPBERRYPI
+#ifdef LINUX_SPI_BCM
 			char data[RFM69_MAX_PACKET_LEN + 1];   // max packet len + 1 byte for the command
-
 			data[0] = RFM69_REG_FIFO & RFM69_READ_REGISTER;
-			SPI.transfern(data, 3);
+			RFM69_SPI.transfern(data, 3);
 
 			RFM69.currentPacket.header.packetLen = data[1];
 			RFM69.currentPacket.header.recipient = data[2];
@@ -289,7 +290,7 @@ LOCAL void RFM69_interruptHandler(void)
 
 			data[0] = RFM69_REG_FIFO & RFM69_READ_REGISTER;
 			//SPI.transfern(data, RFM69.currentPacket.header.packetLen - 1); //TODO: Wrong packetLen?
-			SPI.transfern(data, RFM69.currentPacket.header.packetLen);
+			RFM69_SPI.transfern(data, RFM69.currentPacket.header.packetLen);
 
 			//(void)memcpy((void*)&RFM69.currentPacket.data[2], (void*)&data[1], RFM69.currentPacket.header.packetLen - 2);   //TODO: Wrong packetLen?
 			(void)memcpy((void*)&RFM69.currentPacket.data[2], (void*)&data[1],
@@ -302,21 +303,23 @@ LOCAL void RFM69_interruptHandler(void)
 				RFM69.dataReceived = !RFM69.ackReceived;
 			}
 #else
-			_SPI.transfer(RFM69_REG_FIFO & RFM69_READ_REGISTER);
+			RFM69_SPI.transfer(RFM69_REG_FIFO & RFM69_READ_REGISTER);
 			// set reading pointer
 			uint8_t* current = (uint8_t*)&RFM69.currentPacket;
 			bool headerRead = false;
 			// first read header
 			uint8_t readingLength = RFM69_HEADER_LEN;
 			while (readingLength--) {
-				*current++ = _SPI.transfer((uint8_t)0x00);
+				*current++ = RFM69_SPI.transfer((uint8_t)0x00);
 				if (!readingLength && !headerRead) {
 					// header read
 					headerRead = true;
 					if (RFM69.currentPacket.header.version >= RFM69_MIN_PACKET_HEADER_VERSION) {
 						// read payload
-						readingLength = min(RFM69.currentPacket.header.packetLen - (RFM69_HEADER_LEN - 1),
-						                    RFM69_MAX_PACKET_LEN);
+						readingLength = RFM69.currentPacket.header.packetLen - (RFM69_HEADER_LEN - 1);
+						if (readingLength > RFM69_MAX_PACKET_LEN) {
+							readingLength = RFM69_MAX_PACKET_LEN;
+						}
 						RFM69.currentPacket.payloadLen = readingLength;
 						RFM69.ackReceived = RFM69_getACKReceived(RFM69.currentPacket.header.controlFlags);
 						RFM69.dataReceived = !RFM69.ackReceived;
@@ -357,7 +360,8 @@ LOCAL uint8_t RFM69_recv(uint8_t* buf, const uint8_t maxBufSize)
 	// atomic
 	noInterrupts();
 
-	const uint8_t payloadLen = min(RFM69.currentPacket.payloadLen, maxBufSize);
+	const uint8_t payloadLen = RFM69.currentPacket.payloadLen < maxBufSize?
+	                           RFM69.currentPacket.payloadLen : maxBufSize;
 	const uint8_t sender = RFM69.currentPacket.header.sender;
 	const rfm69_sequenceNumber_t sequenceNumber = RFM69.currentPacket.header.sequenceNumber;
 	const uint8_t controlFlags = RFM69.currentPacket.header.controlFlags;
@@ -451,8 +455,8 @@ LOCAL void RFM69_setHighPowerRegs(const bool onOff)
 LOCAL bool RFM69_setTxPowerLevel(rfm69_powerlevel_t newPowerLevel)
 {
 	// limit power levels
-	newPowerLevel = max(RFM69_MIN_POWER_LEVEL_DBM, newPowerLevel);
-	newPowerLevel = min(RFM69_MAX_POWER_LEVEL_DBM, newPowerLevel);
+	newPowerLevel = max((rfm69_powerlevel_t)RFM69_MIN_POWER_LEVEL_DBM, newPowerLevel);
+	newPowerLevel = min((rfm69_powerlevel_t)RFM69_MAX_POWER_LEVEL_DBM, newPowerLevel);
 
 	if (RFM69.powerLevel == newPowerLevel) {
 		RFM69_DEBUG(PSTR("RFM69:PTX:NO ADJ\n"));
@@ -478,7 +482,7 @@ LOCAL bool RFM69_setTxPowerLevel(rfm69_powerlevel_t newPowerLevel)
 	}
 #endif
 	RFM69_writeReg(RFM69_REG_PALEVEL, palevel);
-	RFM69_DEBUG(PSTR("RFM69:PTX:LEVEL=%d dBm\n"),newPowerLevel);
+	RFM69_DEBUG(PSTR("RFM69:PTX:LEVEL=%" PRIi8 " dBm\n"),newPowerLevel);
 	return true;
 }
 
@@ -621,7 +625,8 @@ LOCAL bool RFM69_standBy(void)
 LOCAL void RFM69_sendACK(const uint8_t recipient, const rfm69_sequenceNumber_t sequenceNumber,
                          const rfm69_RSSI_t RSSI)
 {
-	RFM69_DEBUG(PSTR("RFM69:SAC:SEND ACK,TO=%d,RSSI=%d\n"),recipient, RFM69_internalToRSSI(RSSI));
+	RFM69_DEBUG(PSTR("RFM69:SAC:SEND ACK,TO=%" PRIu8 ",RSSI=%" PRIi16 "\n"),recipient,
+	            RFM69_internalToRSSI(RSSI));
 	rfm69_ack_t ACK;
 	ACK.sequenceNumber = sequenceNumber;
 	ACK.RSSI = RSSI;
@@ -648,7 +653,8 @@ LOCAL bool RFM69_executeATC(const rfm69_RSSI_t currentRSSI, const rfm69_RSSI_t t
 		// nothing to adjust
 		return false;
 	}
-	RFM69_DEBUG(PSTR("RFM69:ATC:ADJ TXL,cR=%d,tR=%d,TXL=%d\n"), RFM69_internalToRSSI(currentRSSI),
+	RFM69_DEBUG(PSTR("RFM69:ATC:ADJ TXL,cR=%" PRIi16 ",tR=%" PRIi16 ",TXL=%" PRIi16 "\n"),
+	            RFM69_internalToRSSI(currentRSSI),
 	            RFM69_internalToRSSI(targetRSSI), newPowerLevel);
 
 	return RFM69_setTxPowerLevel(newPowerLevel);
@@ -665,7 +671,7 @@ LOCAL bool RFM69_sendWithRetry(const uint8_t recipient, const void* buffer,
                                const uint8_t bufferSize, const uint8_t retries, const uint32_t retryWaitTimeMS)
 {
 	for (uint8_t retry = 0; retry <= retries; retry++) {
-		RFM69_DEBUG(PSTR("RFM69:SWR:SEND,TO=%d,RETRY=%d\n"), recipient, retry);
+		RFM69_DEBUG(PSTR("RFM69:SWR:SEND,TO=%" PRIu8 ",RETRY=%" PRIu8 "\n"), recipient, retry);
 		rfm69_controlFlags_t flags = 0x00; // reset all flags
 		RFM69_setACKRequested(flags, (recipient != RFM69_BROADCAST_ADDRESS));
 		RFM69_setACKRSSIReport(flags, RFM69.ATCenabled);
@@ -687,7 +693,8 @@ LOCAL bool RFM69_sendWithRetry(const uint8_t recipient, const void* buffer,
 				// packet read, back to RX
 				RFM69_setRadioMode(RFM69_RADIO_MODE_RX);
 				if (sender == recipient && ACKsequenceNumber == RFM69.txSequenceNumber) {
-					RFM69_DEBUG(PSTR("RFM69:SWR:ACK,FROM=%d,SEQ=%d,RSSI=%d\n"),sender,ACKsequenceNumber,
+					RFM69_DEBUG(PSTR("RFM69:SWR:ACK,FROM=%" PRIu8 ",SEQ=%" PRIu8 ",RSSI=%" PRIi16 "\n"),sender,
+					            ACKsequenceNumber,
 					            RFM69_internalToRSSI(RSSI));
 
 					// ATC
@@ -734,11 +741,11 @@ LOCAL int16_t RFM69_getReceivingRSSI(void)
 
 LOCAL bool RFM69_setTxPowerPercent(uint8_t newPowerPercent)
 {
-	newPowerPercent = min(newPowerPercent, 100);	// limit
+	newPowerPercent = min(newPowerPercent, (uint8_t)100);	// limit
 	const rfm69_powerlevel_t newPowerLevel = static_cast<rfm69_powerlevel_t>
 	        (RFM69_MIN_POWER_LEVEL_DBM + (RFM69_MAX_POWER_LEVEL_DBM
 	                                      - RFM69_MIN_POWER_LEVEL_DBM) * (newPowerPercent / 100.0f));
-	RFM69_DEBUG(PSTR("RFM69:SPP:PCT=%d,TX LEVEL=%d\n"), newPowerPercent,newPowerLevel);
+	RFM69_DEBUG(PSTR("RFM69:SPP:PCT=%" PRIu8 ",TX LEVEL=%" PRIi8 "\n"), newPowerPercent,newPowerLevel);
 	return RFM69_setTxPowerLevel(newPowerLevel);
 }
 
@@ -1100,18 +1107,18 @@ LOCAL void RFM69_listenModeSendBurst(const uint8_t recipient, uint8_t* data, con
 		// write to FIFO  TODO refactorize with func, check if send/sendframe could be used, and prepare packet struct
 		RFM69_prepareSPITransaction();
 		RFM69_csn(LOW);
-		SPI.transfer(RFM69_REG_FIFO | 0x80);
-		SPI.transfer(len +
-		             4);      // two bytes for target and sender node, two bytes for the burst time remaining
-		SPI.transfer(recipient);
-		SPI.transfer(_address);
+		RFM69_SPI.transfer(RFM69_REG_FIFO | 0x80);
+		RFM69_SPI(len +
+		          4);      // two bytes for target and sender node, two bytes for the burst time remaining
+		RFM69_SPI.transfer(recipient);
+		RFM69_SPI.transfer(_address);
 
 		// We send the burst time remaining with the packet so the receiver knows how long to wait before trying to reply
-		SPI.transfer(timeRemaining.b[0]);
-		SPI.transfer(timeRemaining.b[1]);
+		RFM69_SPI.transfer(timeRemaining.b[0]);
+		RFM69_SPI.transfer(timeRemaining.b[1]);
 
 		for (uint8_t i = 0; i < len; i++) {
-			SPI.transfer(((uint8_t*)data)[i]);
+			RFM69_SPI.transfer(((uint8_t*)data)[i]);
 		}
 
 		RFM69_csn(HIGH);

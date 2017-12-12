@@ -31,7 +31,6 @@
 #define CORE_DEBUG(x,...)									//!< debug NULL
 #endif
 
-
 // message buffers
 MyMessage _msg;			// Buffer for incoming messages
 MyMessage _msgTmp;		// Buffer for temporary messages (acks and nonces among others)
@@ -96,14 +95,20 @@ void _begin(void)
 		preHwInit();
 	}
 
-	if (!hwInit()) {
+	const bool hwInitResult = hwInit();
+
+#if !defined(MY_SPLASH_SCREEN_DISABLED) && !defined(MY_GATEWAY_FEATURE)
+	displaySplashScreen();
+#endif
+
+	CORE_DEBUG(PSTR("MCO:BGN:INIT " MY_NODE_TYPE ",CP=" MY_CAPABILITIES ",VER="
+	                MYSENSORS_LIBRARY_VERSION "\n"));
+
+	if (!hwInitResult) {
 		CORE_DEBUG(PSTR("!MCO:BGN:HW ERR\n"));
 		setIndication(INDICATION_ERR_HW_INIT);
 		_infiniteLoop();
 	}
-
-	CORE_DEBUG(PSTR("MCO:BGN:INIT " MY_NODE_TYPE ",CP=" MY_CAPABILITIES ",VER="
-	                MYSENSORS_LIBRARY_VERSION "\n"));
 
 	// set defaults
 	_coreConfig.presentationSent = false;
@@ -118,7 +123,6 @@ void _begin(void)
 	ledsInit();
 #endif
 
-	(void)signerValidatePersonalization();
 	signerInit();
 
 	// Read latest received controller configuration from EEPROM
@@ -164,7 +168,7 @@ void _begin(void)
 		setup();
 	}
 #if defined(MY_SENSOR_NETWORK)
-	CORE_DEBUG(PSTR("MCO:BGN:INIT OK,TSP=%d\n"), isTransportReady());
+	CORE_DEBUG(PSTR("MCO:BGN:INIT OK,TSP=%" PRIu8 "\n"), isTransportReady());
 #else
 	// no sensor network defined, call presentation & registration
 	_callbackTransportReady();
@@ -359,6 +363,23 @@ bool sendSketchInfo(const char *name, const char *version, const bool ack)
 	return result;
 }
 
+#if !defined(__linux__)
+bool sendSketchInfo(const __FlashStringHelper *name, const __FlashStringHelper *version,
+                    const bool ack)
+{
+	bool result = true;
+	if (name) {
+		result &= _sendRoute(build(_msgTmp, GATEWAY_ADDRESS, NODE_SENSOR_ID, C_INTERNAL, I_SKETCH_NAME,
+		                           ack).set(name));
+	}
+	if (version) {
+		result &= _sendRoute(build(_msgTmp, GATEWAY_ADDRESS, NODE_SENSOR_ID, C_INTERNAL, I_SKETCH_VERSION,
+		                           ack).set(version));
+	}
+	return result;
+}
+#endif
+
 bool request(const uint8_t childSensorId, const uint8_t variableType, const uint8_t destination)
 {
 	return _sendRoute(build(_msgTmp, destination, childSensorId, C_REQ, variableType).set(""));
@@ -385,7 +406,7 @@ bool _processInternalMessages(void)
 #if defined (MY_REGISTRATION_FEATURE) && !defined(MY_GATEWAY_FEATURE)
 			_coreConfig.nodeRegistered = _msg.getBool();
 			setIndication(INDICATION_GOT_REGISTRATION);
-			CORE_DEBUG(PSTR("MCO:PIM:NODE REG=%d\n"), _coreConfig.nodeRegistered);	// node registration
+			CORE_DEBUG(PSTR("MCO:PIM:NODE REG=%" PRIu8 "\n"), _coreConfig.nodeRegistered);	// node registration
 #endif
 		} else if (type == I_CONFIG) {
 			// Pick up configuration from controller (currently only metric/imperial) and store it in eeprom if changed
@@ -518,16 +539,9 @@ void doYield(void)
 int8_t _sleep(const uint32_t sleepingMS, const bool smartSleep, const uint8_t interrupt1,
               const uint8_t mode1, const uint8_t interrupt2, const uint8_t mode2)
 {
-	CORE_DEBUG(PSTR("MCO:SLP:MS=%lu,SMS=%d,I1=%d,M1=%d,I2=%d,M2=%d\n"), sleepingMS, smartSleep,
+	CORE_DEBUG(PSTR("MCO:SLP:MS=%" PRIu32 ",SMS=%" PRIu8 ",I1=%" PRIu8 ",M1=%" PRIu8 ",I2=%" PRIu8
+	                ",M2=%" PRIu8 "\n"), sleepingMS, smartSleep,
 	           interrupt1, mode1, interrupt2, mode2);
-	// OTA FW feature: do not sleep if FW update ongoing
-#if defined(MY_OTA_FIRMWARE_FEATURE)
-	if (isFirmwareUpdateOngoing()) {
-		CORE_DEBUG(PSTR("!MCO:SLP:FWUPD\n"));	// sleeping not possible, FW update ongoing
-		wait(sleepingMS);
-		return MY_SLEEP_NOT_POSSIBLE;
-	}
-#endif
 	// repeater feature: sleeping not possible
 #if defined(MY_REPEATER_FEATURE)
 	(void)smartSleep;
@@ -555,21 +569,42 @@ int8_t _sleep(const uint32_t sleepingMS, const bool smartSleep, const uint8_t in
 		// sleep remainder
 		if (sleepDeltaMS < sleepingTimeMS) {
 			sleepingTimeMS -= sleepDeltaMS;		// calculate remaining sleeping time
-			CORE_DEBUG(PSTR("MCO:SLP:MS=%lu\n"), sleepingTimeMS);
+			CORE_DEBUG(PSTR("MCO:SLP:MS=%" PRIu32 "\n"), sleepingTimeMS);
 		} else {
 			// no sleeping time left
 			return MY_SLEEP_NOT_POSSIBLE;
 		}
 	}
+	// OTA FW feature: do not sleep if FW update ongoing
+#if defined(MY_OTA_FIRMWARE_FEATURE)
+	while (isFirmwareUpdateOngoing() && sleepingTimeMS) {
+		CORE_DEBUG(PSTR("!MCO:SLP:FWUPD\n"));	// sleeping not possible, FW update ongoing
+		wait(1000ul);
+		sleepingTimeMS = sleepingTimeMS >= 1000ul ? sleepingTimeMS - 1000ul : 1000ul;
+	}
+#endif // MY_OTA_FIRMWARE_FEATURE
 	if (smartSleep) {
+		// sleeping time left?
+		if (sleepingTimeMS < ((uint32_t)MY_SMART_SLEEP_WAIT_DURATION_MS)) {
+			wait(sleepingMS);
+			CORE_DEBUG(PSTR("!MCO:SLP:NTL\n"));	// sleeping not possible, no time left
+			return MY_SLEEP_NOT_POSSIBLE;
+		}
 		// notify controller about going to sleep, payload indicates smartsleep waiting time in MS
 		(void)_sendRoute(build(_msgTmp, GATEWAY_ADDRESS, NODE_SENSOR_ID, C_INTERNAL,
 		                       I_PRE_SLEEP_NOTIFICATION).set((uint32_t)MY_SMART_SLEEP_WAIT_DURATION_MS));
 		wait(MY_SMART_SLEEP_WAIT_DURATION_MS);		// listen for incoming messages
+#if defined(MY_OTA_FIRMWARE_FEATURE)
+		// check if during smart sleep waiting period a FOTA request was received
+		if (isFirmwareUpdateOngoing()) {
+			CORE_DEBUG(PSTR("!MCO:SLP:FWUPD\n"));	// sleeping not possible, FW update ongoing
+			return MY_SLEEP_NOT_POSSIBLE;
+		}
+#endif // MY_OTA_FIRMWARE_FEATURE
 	}
 #else
 	(void)smartSleep;
-#endif
+#endif // MY_SENSOR_NETWORK
 
 #if defined(MY_SENSOR_NETWORK)
 	transportDisable();
@@ -595,7 +630,7 @@ int8_t _sleep(const uint32_t sleepingMS, const bool smartSleep, const uint8_t in
 		result = hwSleep(sleepingTimeMS);
 	}
 	setIndication(INDICATION_WAKEUP);
-	CORE_DEBUG(PSTR("MCO:SLP:WUP=%d\n"), result);	// sleep wake-up
+	CORE_DEBUG(PSTR("MCO:SLP:WUP=%" PRIi8 "\n"), result);	// sleep wake-up
 #if defined(MY_SENSOR_NETWORK)
 	transportReInitialise();
 #endif
@@ -655,7 +690,8 @@ void _nodeLock(const char* str)
 	hwWriteConfig(EEPROM_NODE_LOCK_COUNTER, 0);
 	while (1) {
 		setIndication(INDICATION_ERR_LOCKED);
-		CORE_DEBUG(PSTR("MCO:NLK:NODE LOCKED. TO UNLOCK, GND PIN %d AND RESET\n"), MY_NODE_UNLOCK_PIN);
+		CORE_DEBUG(PSTR("MCO:NLK:NODE LOCKED. TO UNLOCK, GND PIN %" PRIu8 " AND RESET\n"),
+		           MY_NODE_UNLOCK_PIN);
 		doYield();
 		(void)_sendRoute(build(_msgTmp, GATEWAY_ADDRESS, NODE_SENSOR_ID,C_INTERNAL, I_LOCKED).set(str));
 #if defined(MY_SENSOR_NETWORK)
@@ -663,7 +699,7 @@ void _nodeLock(const char* str)
 		CORE_DEBUG(PSTR("MCO:NLK:TSL\n"));	// sleep transport
 #endif
 		setIndication(INDICATION_SLEEP);
-		(void)hwSleep((unsigned long)1000*60*30); // Sleep for 30 min before resending LOCKED message
+		(void)hwSleep((uint32_t)1000*60*30); // Sleep for 30 min before resending LOCKED message
 		setIndication(INDICATION_WAKEUP);
 	}
 #else
@@ -679,7 +715,7 @@ void _checkNodeLock(void)
 		// Node is locked, check if unlock pin is asserted, else hang the node
 		hwPinMode(MY_NODE_UNLOCK_PIN, INPUT_PULLUP);
 		// Make a short delay so we are sure any large external nets are fully pulled
-		unsigned long enter = hwMillis();
+		uint32_t enter = hwMillis();
 		while (hwMillis() - enter < 2) {}
 		if (hwDigitalRead(MY_NODE_UNLOCK_PIN) == 0) {
 			// Pin is grounded, reset lock counter

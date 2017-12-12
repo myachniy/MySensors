@@ -34,26 +34,26 @@
 * RF24 driver-related log messages, format: [!]SYSTEM:[SUB SYSTEM:]MESSAGE
 * - [!] Exclamation mark is prepended in case of error
 *
-* |E| SYS	| SUB	| Message							| Comment
-* |-|-------|-------|-----------------------------------|---------------------------------------------------------------------
-* | | RF24	| INIT	|									| Initialise RF24 radio
-* | | RF24	| INIT	| PIN,CE=%d,CS=%d					| Pin configuration: chip enable (CE), chip select (CS)
-* |!| RF24	| INIT	| SANCHK FAIL						| Sanity check failed, check wiring or replace module
-* | | RF24	| SPP	| PCT=%d,TX LEVEL=%d				| Set TX level, input TX percent (PCT)
-* | | RF24	| RBR	| REG=%d,VAL=%d						| Read register (REG), value=(VAL)
-* | | RF24	| WBR	| REG=%d,VAL=%d						| Write register (REG), value=(VAL)
-* | | RF24	| FRX	| 									| Flush RX buffer
-* | | RF24	| FTX	| 									| Flush TX buffer
-* | | RF24	| OWP	| RCPT=%d							| Open writing pipe, recipient=(RCPT)
-* | | RF24	| STL	| 									| Start listening
-* | | RF24	| SPL	| 									| Stop listening
-* | | RF24	| SLP	| 									| Set radio to sleep
-* | | RF24	| SBY	| 									| Set radio to standby
-* | | RF24	| TXM	| TO=%d,LEN=%d						| Transmit message to=(TO), length=(LEN)
-* |!| RF24	| TXM	| MAX_RT							| Max TX retries, no ACK received
-* |!| RF24	| GDP	| PYL INV							| Invalid payload size
-* | | RF24	| RXM	| LEN=%d							| Read message, length=(LEN)
-* | | RF24	| STX	| LEVEL=%d							| Set TX level, level=(LEVEL)
+* |E| SYS  | SUB  | Message            | Comment
+* |-|------|------|--------------------|---------------------------------------------------------------------
+* | | RF24 | INIT |                    | Initialise RF24 radio
+* | | RF24 | INIT | PIN,CE=%d,CS=%d    | Pin configuration: chip enable (CE), chip select (CS)
+* |!| RF24 | INIT | SANCHK FAIL        | Sanity check failed, check wiring or replace module
+* | | RF24 | SPP  | PCT=%d,TX LEVEL=%d | Set TX level, input TX percent (PCT)
+* | | RF24 | RBR  | REG=%d,VAL=%d      | Read register (REG), value=(VAL)
+* | | RF24 | WBR  | REG=%d,VAL=%d      | Write register (REG), value=(VAL)
+* | | RF24 | FRX  |                    | Flush RX buffer
+* | | RF24 | FTX  |                    | Flush TX buffer
+* | | RF24 | OWP  | RCPT=%d            | Open writing pipe, recipient=(RCPT)
+* | | RF24 | STL  |                    | Start listening
+* | | RF24 | SPL  |                    | Stop listening
+* | | RF24 | SLP  |                    | Set radio to sleep
+* | | RF24 | SBY  |                    | Set radio to standby
+* | | RF24 | TXM  | TO=%d,LEN=%d       | Transmit message to=(TO), length=(LEN)
+* |!| RF24 | TXM  | MAX_RT             | Max TX retries, no ACK received
+* |!| RF24 | GDP  | PYL INV            | Invalid payload size
+* | | RF24 | RXM  | LEN=%d             | Read message, length=(LEN)
+* | | RF24 | STX  | LEVEL=%d           | Set TX level, level=(LEVEL)
 *
 */
 
@@ -75,6 +75,8 @@
 //#define DEFAULT_RF24_CS_PIN			(24)	//!< DEFAULT_RF24_CS_PIN
 #elif defined(ARDUINO_ARCH_STM32F1)
 #define DEFAULT_RF24_CE_PIN				(PB0)	//!< DEFAULT_RF24_CE_PIN
+#elif defined(TEENSYDUINO)
+#define DEFAULT_RF24_CE_PIN				(9)		//!< DEFAULT_RF24_CE_PIN
 #else
 #define DEFAULT_RF24_CE_PIN				(9)		//!< DEFAULT_RF24_CE_PIN
 #endif
@@ -90,20 +92,18 @@
 
 #define RF24_BROADCAST_ADDRESS	(255u)	//!< RF24_BROADCAST_ADDRESS
 
-#if defined(ARDUINO) && !defined(__arm__) && !defined(_SPI)
+#if defined(ARDUINO) && !defined(__arm__) && !defined(RF24_SPI)
 #include <SPI.h>
 #if defined(MY_SOFTSPI)
 SoftSPI<MY_SOFT_SPI_MISO_PIN, MY_SOFT_SPI_MOSI_PIN, MY_SOFT_SPI_SCK_PIN, RF24_SPI_DATA_MODE>
-_SPI;
+RF24_SPI;
 #else
-#define _SPI SPI			//!< SPI
+#define RF24_SPI SPI			//!< SPI
 #endif
 #else
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-
-#define _BV(x) (1<<(x))		//!< _BV()
 
 #if defined(__arm__) || defined(__linux__)
 #include <SPI.h>
@@ -111,8 +111,8 @@ _SPI;
 extern HardwareSPI SPI;		//!<  SPI
 #endif
 
-#if !defined(_SPI)
-#define _SPI SPI			//!<  SPI
+#if !defined(RF24_SPI)
+#define RF24_SPI SPI			//!<  SPI
 #endif
 #endif
 
@@ -145,7 +145,7 @@ extern HardwareSPI SPI;		//!<  SPI
 #else
 #define RF24_CONFIGURATION (uint8_t) (RF24_CRC_16 << 2)		//!< RF24_CONFIGURATION
 #endif
-#define RF24_FEATURE (uint8_t)( _BV(RF24_EN_DPL) | _BV(RF24_EN_ACK_PAY) )	//!<  RF24_FEATURE
+#define RF24_FEATURE (uint8_t)( _BV(RF24_EN_DPL))	//!<  RF24_FEATURE
 #define RF24_RF_SETUP (uint8_t)( ((MY_RF24_DATARATE & 0b10 ) << 4) | ((MY_RF24_DATARATE & 0b01 ) << 3) | (MY_RF24_PA_LEVEL << 1) ) + 1 		//!< RF24_RF_SETUP, +1 for Si24R1 and LNA
 
 // powerup delay

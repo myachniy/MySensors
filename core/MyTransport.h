@@ -31,101 +31,101 @@
 *  - <b>TSF</b>: messages emitted by transport support functions
 * - SUB SYSTEMS:
 *  - Transport state machine (<b>TSM</b>)
-*   - TSM:INIT						from <b>stInit</b> Initialize transport and radio
-*   - TSM:FPAR						from <b>stParent</b> Find parent
-*   - TSM:ID						from <b>stID</b> Check/request node ID, if dynamic node ID set
-*   - TSM:UPL						from <b>stUplink</b> Verify uplink connection by pinging GW
-*   - TSM:READY						from <b>stReady</b> Transport is ready and fully operational
-*   - TSM:FAIL						from <b>stFailure</b> Failure in transport link or transport HW
+*   - TSM:<b>INIT</b>		from <b>stInit</b> Initialize transport and radio
+*   - TSM:<b>FPAR</b>		from <b>stParent</b> Find parent
+*   - TSM:<b>ID</b>			from <b>stID</b> Check/request node ID, if dynamic node ID set
+*   - TSM:<b>UPL</b>		from <b>stUplink</b> Verify uplink connection by pinging GW
+*   - TSM:<b>READY</b>	from <b>stReady</b> Transport is ready and fully operational
+*   - TSM:<b>FAIL</b>		from <b>stFailure</b> Failure in transport link or transport HW
 *  - Transport support function (<b>TSF</b>)
-*   - TSF:CKU						from @ref transportCheckUplink(), checks connection to GW
-*   - TSF:SID						from @ref transportAssignNodeID(), assigns node ID
-*   - TSF:PNG						from @ref transportPingNode(), pings a node
-*   - TSF:WUR						from @ref transportWaitUntilReady(), waits until transport is ready
-*   - TSF:CRT						from @ref transportClearRoutingTable(), clears routing table stored in EEPROM
-*   - TSF:LRT						from @ref transportLoadRoutingTable(), loads RAM routing table from EEPROM (only GW/repeaters)
-*   - TSF:SRT						from @ref transportSaveRoutingTable(), saves RAM routing table to EEPROM (only GW/repeaters)
-*   - TSF:MSG						from @ref transportProcessMessage(), processes incoming message
-*   - TSF:SAN						from @ref transportInvokeSanityCheck(), calls transport-specific sanity check
-*   - TSF:RTE						from @ref transportRouteMessage(), sends message
-*   - TSF:SND						from @ref transportSendRoute(), sends message if transport is ready (exposed)
-*   - TSF:TDI						from @ref transportDisable()
-*   - TSF:TRI						from @ref transportReInitialise()
-*   - TSF:SIR						from @ref transportSignalReport()
+*   - TSF:<b>CKU</b>		from @ref transportCheckUplink(), checks connection to GW
+*   - TSF:<b>SID</b>		from @ref transportAssignNodeID(), assigns node ID
+*   - TSF:<b>PNG</b>		from @ref transportPingNode(), pings a node
+*   - TSF:<b>WUR</b>		from @ref transportWaitUntilReady(), waits until transport is ready
+*   - TSF:<b>CRT</b>		from @ref transportClearRoutingTable(), clears routing table stored in EEPROM
+*   - TSF:<b>LRT</b>		from @ref transportLoadRoutingTable(), loads RAM routing table from EEPROM (only GW/repeaters)
+*   - TSF:<b>SRT</b>		from @ref transportSaveRoutingTable(), saves RAM routing table to EEPROM (only GW/repeaters)
+*   - TSF:<b>MSG</b>		from @ref transportProcessMessage(), processes incoming message
+*   - TSF:<b>SAN</b>		from @ref transportInvokeSanityCheck(), calls transport-specific sanity check
+*   - TSF:<b>RTE</b>		from @ref transportRouteMessage(), sends message
+*   - TSF:<b>SND</b>		from @ref transportSendRoute(), sends message if transport is ready (exposed)
+*   - TSF:<b>TDI</b>		from @ref transportDisable()
+*   - TSF:<b>TRI</b>		from @ref transportReInitialise()
+*   - TSF:<b>SIR</b>		from @ref transportSignalReport()
 *
 * Transport debug log messages:
 *
-* |E| SYS	| SUB		| Message					| Comment
-* |-|-------|-----------|---------------------------|---------------------------------------------------------------------
-* | | TSM	| INIT		|							| <b>Transition to stInit state</b>
-* | | TSM	| INIT		| STATID=%%d				| Node ID is static
-* | | TSM	| INIT		| TSP OK					| Transport device configured and fully operational
-* | | TSM	| INIT		| TSP PSM					| Transport passive mode set
-* | | TSM	| INIT		| GW MODE					| Node is set up as GW, thus omitting ID and findParent states
-* |!| TSM	| INIT		| TSP FAIL					| Transport device initialization failed
-* | | TSM	| FPAR		|							| <b>Transition to stParent state</b>
-* | | TSM	| FPAR		| STATP=%%d					| Static parent set, skip finding parent
-* | | TSM	| FPAR		| OK						| Parent node identified
-* |!| TSM	| FPAR		| NO REPLY					| No potential parents replied to find parent request
-* |!| TSM	| FPAR		| FAIL						| Finding parent failed
-* | | TSM	| ID		|							| <b>Transition to stID state</b>
-* | | TSM	| ID		| OK,ID=%%d					| Node ID is valid
-* | | TSM	| ID		| REQ						| Request node ID from controller
-* |!| TSM	| ID		| FAIL,ID=%%d				| ID verification failed, ID invalid
-* | | TSM	| UPL		|							| <b>Transition to stUplink state</b>
-* | | TSM	| UPL		| OK						| Uplink OK, GW returned ping
-* | | TSF	| UPL		| DGWC,O=%%d,N=%%d			| Uplink check revealed changed network topology, old distance (O), new distance (N)
-* |!| TSM	| UPL		| FAIL						| Uplink check failed, i.e. GW could not be pinged
-* | | TSM	| READY		| SRT						| Save routing table
-* | | TSM	| READY		| ID=%%d,PAR=%%d,DIS=%%d	| <b>Transition to stReady</b> Transport ready, node ID (ID), parent node ID (PAR), distance to GW (DIS)
-* |!| TSM	| READY		| UPL FAIL,SNP				| Too many failed uplink transmissions, search new parent
-* |!| TSM	| READY		| FAIL,STATP				| Too many failed uplink transmissions, static parent enforced
-* | | TSM	| FAIL		| CNT=%%d					| <b>Transition to stFailure state</b>, consecutive failure counter (CNT)
-* | | TSM	| FAIL		| DIS						| Disable transport
-* | | TSM	| FAIL		| RE-INIT					| Attempt to re-initialize transport
-* | | TSF	| CKU		| OK						| Uplink OK
-* | | TSF	| CKU		| OK,FCTRL					| Uplink OK, flood control prevents pinging GW in too short intervals
-* | | TSF	| CKU		| DGWC,O=%%d,N=%%d			| Uplink check revealed changed network topology, old distance (O), new distance (N)
-* | | TSF	| CKU		| FAIL						| No reply received when checking uplink
-* | | TSF	| SID		| OK,ID=%%d					| Node ID assigned
-* |!| TSF	| SID		| FAIL,ID=%%d				| Assigned ID is invalid
-* | | TSF	| PNG		| SEND,TO=%%d				| Send ping to destination (TO)
-* | | TSF	| WUR		| MS=%%lu					| Wait until transport ready, timeout (MS)
-* | | TSF	| MSG		| ACK REQ					| ACK message requested
-* | | TSF	| MSG		| ACK						| ACK message, do not proceed but forward to callback
-* | | TSF	| MSG		| FPAR RES,ID=%%d,D=%%d		| Response to find parent received from node (ID) with distance (D) to GW
-* | | TSF	| MSG		| FPAR PREF FOUND			| Preferred parent found, i.e. parent defined via MY_PARENT_NODE_ID
-* | | TSF	| MSG		| FPAR OK,ID=%%d,D=%%d		| Find parent response from node (ID) is valid, distance (D) to GW
-* | | TSF	| MSG		| FPAR INACTIVE				| Find parent response received, but no find parent request active, skip response
-* | | TSF	| MSG		| FPAR REQ,ID=%%d			| Find parent request from node (ID)
-* | | TSF	| MSG		| PINGED,ID=%%d,HP=%%d		| Node pinged by node (ID) with (HP) hops
-* | | TSF	| MSG		| PONG RECV,HP=%%d			| Pinged node replied with (HP) hops
-* | | TSF	| MSG		| BC						| Broadcast message received
-* | | TSF	| MSG		| GWL OK					| Link to GW ok
-* | | TSF	| MSG		| FWD BC MSG				| Controlled broadcast message forwarding
-* | | TSF	| MSG		| REL MSG					| Relay message
-* | | TSF	| MSG		| REL PxNG,HP=%%d			| Relay PING/PONG message, increment hop counter (HP)
-* |!| TSF	| MSG		| LEN,%%d!=%%d				| Invalid message length, (actual!=expected)
-* |!| TSF	| MSG		| PVER,%%d!=%%d				| Message protocol version mismatch (actual!=expected)
-* |!| TSF	| MSG		| SIGN VERIFY FAIL			| Signing verification failed
-* |!| TSF	| MSG		| REL MSG,NORP				| Node received a message for relaying, but node is not a repeater, message skipped
-* |!| TSF	| MSG		| SIGN FAIL					| Signing message failed
-* |!| TSF	| MSG		| GWL FAIL					| GW uplink failed
-* |!| TSF	| MSG		| ID TK INVALID				| Token for ID request invalid
-* | | TSF	| SAN		| OK						| Sanity check passed
-* |!| TSF	| SAN		| FAIL						| Sanity check failed, attempt to re-initialize radio
-* | | TSF	| CRT		| OK						| Clearing routing table successful
-* | | TSF	| LRT		| OK						| Loading routing table successful
-* | | TSF	| SRT		| OK						| Saving routing table successful
-* |!| TSF	| RTE		| FPAR ACTIVE				| Finding parent active, message not sent
-* |!| TSF	| RTE		| DST %%d UNKNOWN			| Routing for destination (DST) unknown, send message to parent
-* | | TSF	| RRT		| ROUTE N=%%d,R=%%d			| Routing table, messages to node (N) are routed via node (R)
-* |!| TSF	| SND		| TNR						| Transport not ready, message cannot be sent
-* | | TSF	| TDI		| TSL						| Set transport to sleep
-* | | TSF	| TDI		| TPD						| Power down transport
-* | | TSF	| TRI		| TRI						| Reinitialise transport
-* | | TSF	| TRI		| TSB						| Set transport to standby
-* | | TSF	| SIR		| CMD=%d,VAL=%d				| Get signal report
+* |E| SYS | SUB   | Message										| Comment
+* |-|-----|-------|---------------------------|---------------------------------------------------------------------
+* | | TSM | INIT  |														| <b>Transition to stInit state</b>
+* | | TSM | INIT  | STATID=%%d								| Node ID is static
+* | | TSM | INIT  | TSP OK										| Transport device configured and fully operational
+* | | TSM | INIT  | TSP PSM										| Transport passive mode set
+* | | TSM | INIT  | GW MODE										| Node is set up as GW, thus omitting ID and findParent states
+* |!| TSM | INIT  | TSP FAIL									| Transport device initialization failed
+* | | TSM | FPAR  |														| <b>Transition to stParent state</b>
+* | | TSM | FPAR  | STATP=%%d									| Static parent set, skip finding parent
+* | | TSM | FPAR  | OK												| Parent node identified
+* |!| TSM | FPAR  | NO REPLY									| No potential parents replied to find parent request
+* |!| TSM | FPAR  | FAIL											| Finding parent failed
+* | | TSM | ID    |														| <b>Transition to stID state</b>
+* | | TSM | ID    | OK,ID=%%d									| Node ID is valid
+* | | TSM | ID    | REQ												| Request node ID from controller
+* |!| TSM | ID    | FAIL,ID=%%d								| ID verification failed, ID invalid, no ID received from controller
+* | | TSM | UPL   |														| <b>Transition to stUplink state</b>
+* | | TSM | UPL   | OK												| Uplink OK, GW returned ping
+* | | TSF | UPL   | DGWC,O=%%d,N=%%d					| Uplink check revealed changed network topology, old distance (O), new distance (N)
+* |!| TSM | UPL   | FAIL											| Uplink check failed, i.e. GW could not be pinged
+* | | TSM | READY | SRT												| Save routing table
+* | | TSM | READY | ID=%%d,PAR=%%d,DIS=%%d		| <b>Transition to stReady</b> Transport ready, node ID (ID), parent node ID (PAR), distance to GW (DIS)
+* |!| TSM | READY | UPL FAIL,SNP							| Too many failed uplink transmissions, search new parent
+* |!| TSM | READY | FAIL,STATP								| Too many failed uplink transmissions, static parent enforced
+* | | TSM | FAIL  | CNT=%%d										| <b>Transition to stFailure state</b>, consecutive failure counter (CNT)
+* | | TSM | FAIL  | DIS												| Disable transport
+* | | TSM | FAIL  | RE-INIT										| Attempt to re-initialize transport
+* | | TSF | CKU   | OK												| Uplink OK
+* | | TSF | CKU   | OK,FCTRL									| Uplink OK, flood control prevents pinging GW in too short intervals
+* | | TSF | CKU   | DGWC,O=%%d,N=%%d					| Uplink check revealed changed network topology, old distance (O), new distance (N)
+* | | TSF | CKU   | FAIL											| No reply received when checking uplink
+* | | TSF | SID   | OK,ID=%%d									| Node ID assigned
+* |!| TSF | SID   | FAIL,ID=%%d								| Assigned ID is invalid
+* | | TSF | PNG   | SEND,TO=%%d								| Send ping to destination (TO)
+* | | TSF | WUR   | MS=%%lu										| Wait until transport ready, timeout (MS)
+* | | TSF | MSG   | ACK REQ										| ACK message requested
+* | | TSF | MSG   | ACK												| ACK message, do not proceed but forward to callback
+* | | TSF | MSG   | FPAR RES,ID=%%d,D=%%d			| Response to find parent received from node (ID) with distance (D) to GW
+* | | TSF | MSG   | FPAR PREF FOUND						| Preferred parent found, i.e. parent defined via MY_PARENT_NODE_ID
+* | | TSF | MSG   | FPAR OK,ID=%%d,D=%%d			| Find parent response from node (ID) is valid, distance (D) to GW
+* | | TSF | MSG   | FPAR INACTIVE							| Find parent response received, but no find parent request active, skip response
+* | | TSF | MSG   | FPAR REQ,ID=%%d						| Find parent request from node (ID)
+* | | TSF | MSG   | PINGED,ID=%%d,HP=%%d			| Node pinged by node (ID) with (HP) hops
+* | | TSF | MSG   | PONG RECV,HP=%%d					| Pinged node replied with (HP) hops
+* | | TSF | MSG   | BC												| Broadcast message received
+* | | TSF | MSG   | GWL OK										| Link to GW ok
+* | | TSF | MSG   | FWD BC MSG								| Controlled broadcast message forwarding
+* | | TSF | MSG   | REL MSG										| Relay message
+* | | TSF | MSG   | REL PxNG,HP=%%d						| Relay PING/PONG message, increment hop counter (HP)
+* |!| TSF | MSG   | LEN,%%d!=%%d							| Invalid message length, (actual!=expected)
+* |!| TSF | MSG   | PVER,%%d!=%%d							| Message protocol version mismatch (actual!=expected)
+* |!| TSF | MSG   | SIGN VERIFY FAIL					| Signing verification failed
+* |!| TSF | MSG   | REL MSG,NORP							| Node received a message for relaying, but node is not a repeater, message skipped
+* |!| TSF | MSG   | SIGN FAIL									| Signing message failed
+* |!| TSF | MSG   | GWL FAIL									| GW uplink failed
+* |!| TSF | MSG   | ID TK INVALID							| Token for ID request invalid
+* | | TSF | SAN   | OK												| Sanity check passed
+* |!| TSF | SAN   | FAIL											| Sanity check failed, attempt to re-initialize radio
+* | | TSF | CRT   | OK												| Clearing routing table successful
+* | | TSF | LRT   | OK												| Loading routing table successful
+* | | TSF | SRT   | OK												| Saving routing table successful
+* |!| TSF | RTE   | FPAR ACTIVE								| Finding parent active, message not sent
+* |!| TSF | RTE   | DST %%d UNKNOWN						| Routing for destination (DST) unknown, send message to parent
+* | | TSF | RRT   | ROUTE N=%%d,R=%%d					| Routing table, messages to node (N) are routed via node (R)
+* |!| TSF | SND   | TNR												| Transport not ready, message cannot be sent
+* | | TSF | TDI   | TSL												| Set transport to sleep
+* | | TSF | TDI   | TPD												| Power down transport
+* | | TSF | TRI   | TRI												| Reinitialise transport
+* | | TSF | TRI   | TSB												| Set transport to standby
+* | | TSF | SIR   | CMD=%d,VAL=%d							| Get signal report
 *
 *
 * Incoming / outgoing messages:
@@ -214,6 +214,9 @@
 #endif
 #if defined(MY_RS485)
 #error Receive message buffering not supported for RS485!
+#endif
+#if defined(MY_RADIO_NRF5_ESB)
+#error Receive message buffering not supported for NRF5 radio! Please define MY_NRF5_RX_BUFFER_SIZE
 #endif
 #elif !defined(MY_RX_MESSAGE_BUFFER_FEATURE) && defined(MY_RX_MESSAGE_BUFFER_SIZE)
 #error Receive message buffering requires message buffering feature enabled!
