@@ -114,10 +114,10 @@ bool gatewayTransportConnect(void)
 		{
 			WiFi.disconnect();
 			WiFi.begin(MY_ESP8266_SSID_LIST[currSsidIndex][0], MY_ESP8266_SSID_LIST[currSsidIndex][1]);
-			
+
 			retries = 20;
 
-			if(++currSsidIndex > MY_ESP8266_SSID_LIST_ITEMS)
+			if(++currSsidIndex >= MY_ESP8266_SSID_LIST_ITEMS)
 				currSsidIndex = 0;
 		}
 #endif
@@ -173,7 +173,7 @@ bool gatewayTransportInit(void)
 #endif
 #if !defined (MY_ESP8266_SSID_LIST)
 	(void)WiFi.begin(MY_ESP8266_SSID, MY_ESP8266_PASSWORD);
-#endif	
+#endif
 #endif
 
 	gatewayTransportConnect();
